@@ -72,12 +72,6 @@ module AnyPort
 
       def get_through_cache(address:, otherwise:)
         http_cache.(service_address: address, request: otherwise)
-        # resp = http_cache.hit(service_address: address)
-        # if !resp
-        #   resp = otherwise.call
-        #   http_cache.add(service_address: address, value: resp, directives: HttpCacheDirectives.new.(headers: resp.headers) )
-        # end
-        # resp
       end
 
       def post(service_address, body)

@@ -4,6 +4,8 @@ module AnyPort
 
     class HttpCacheDirectives
 
+      include Ytry
+
       attr_reader :caching_enabled, :perform_modification_check, :cache_valid_until, :revalidate
 
     #   "etag"=>"\"70d959ef58229c4a7e402201a131d430\"",
@@ -62,7 +64,8 @@ module AnyPort
       end
 
       def cache_control
-        @headers["cache-control"] ? @control ||= @headers["cache-control"].gsub(" ", "").split(",") : @control = []
+        # @headers["cache-control"] ? @control ||= @headers["cache-control"].gsub(" ", "").split(",") : @control = []
+        @control ||= Try { @headers[:cache_control].gsub(" ", "")  }.get_or_else {""}.split(",")
       end
 
       def no_cache_present?

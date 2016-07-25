@@ -7,6 +7,7 @@ require 'dry-container'
 require 'dry-auto_inject'
 require 'mini_cache'
 require 'dry-types'
+require 'ytry'
 
 Dir["#{Dir.pwd}/lib/shared/*.rb"].each {|file| require file }
 
@@ -29,20 +30,26 @@ end
 
 class MockServiceAdapter
   include AnyPort::Circuit
+  include Ytry
 
   def perform
     service = :hamsters
     resource = "/hamsters"
-    begin
-      result = with_circuit do |circuit|
+    result = Try {
+      with_circuit do |circuit|
         circuit.service_name = resource
       end.call {MockClient.new.call(service, resource, :development)}
-    rescue AnyPort::CircuitBreaker::CircuitOpen => e
-      puts "===>CircuitBreaker Open Exception"
-    rescue AnyPort::PortException => e
-      puts "===>General Port Exception, #{e}"
-    end
-    result
+    }
+    result.get_or_else {result.error}
+    # begin
+    #   result = with_circuit do |circuit|
+    #     circuit.service_name = resource
+    #   end.call {MockClient.new.call(service, resource, :development)}
+    # rescue AnyPort::CircuitBreaker::CircuitOpen => e
+    #   puts "===>CircuitBreaker Open Exception"
+    # rescue AnyPort::PortException => e
+    #   puts "===>General Port Exception, #{e}"
+    # end
   end
 
 end
@@ -62,7 +69,7 @@ end
 
 
 result = MockServiceAdapter.new.perform
-puts result.body
+puts result
 result = MockServiceAdapter.new.perform
 binding.pry
 # MockServiceAdapterWithoutCircuit.new.perform

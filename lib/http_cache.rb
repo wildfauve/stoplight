@@ -6,41 +6,65 @@ module AnyPort
 
       NOT_MODIFIED = 304
 
+      HTTP_PIPELINE = [:hit, :check_for_modification, :make_request, :refresh_cache]
+
       CACHE = MiniCache::Store.new
 
-      def hit(service_address:)
-        hit = CACHE.get(service_address)
+      def call(service_address:, request:)
+        puts "HTTP Cache====> Call---for Service: #{service_address}"
+        # Each step in the pipeline takes:
+        # 1. A tuple containing the service_address and a block containing the request
+        # 2. A Faraday result object
+        # Each step determines, based on its input, whether to take an action (such as performing the request, or augmenting headers)
+        HTTP_PIPELINE.inject({}) { |result, func| send(func, [service_address, request], result) }[:value]
+      end
+
+      def hit(input, result)
+        puts "HTTP Cache====> In hit"
+        hit = CACHE.get(input[0])
         if hit
-          Time.now <= hit[:directives].cache_valid_until ? hit : nil
+          puts "HTTP Cache====> Cache Hit"
+          Time.now <= hit[:directives].cache_valid_until ? hit : {value: nil, directives: {}}
         else
-          nil
+          {value: nil, directives: {}}
         end
       end
 
-      def call(service_address:, request:)
-        cached_resp = hit(service_address: service_address)
-        if !cached_resp
-          resp = make_request(service_address, request, {})
+      def check_for_modification(input, result)
+        puts "HTTP Cache====> in check_for_modification"
+        if !result[:value] # there is nothing to check
+          puts "HTTP Cache====> none to check"
+          result
         else
-          puts "====> From Cache"
-          if revalidate(cached_resp[:directives])
-            puts "====> Revalidate with server"
-            resp = make_request(service_address, request, revalidate_headers(cached_resp[:directives]))
-            resp = cached_resp[:value] if !resp
+          if revalidate(result[:directives])
+            puts "HTTP Cache====> Revalidate with server"
+            {value: result[:value], directives: revalidate_headers(result[:directives])}
           end
         end
-        resp
       end
 
-      def make_request(service_address, request, headers)
-        resp = request.call(headers)
+      def make_request(input, result, headers=nil)
+        puts "HTTP Cache====> in request"
+        resp = input[1].call(result[:directives])
         if resp.status == NOT_MODIFIED
-          puts "====> Not Modified"
-          nil
+          # TODO: check what headers are returned...use should not overwrite the existing cache headers.
+          puts "HTTP Cache====>  Not Modified"
+          binding.pry
+          {value: resp, directives: HttpCacheDirectives.new.(headers: resp.headers)}
         else
-          add(service_address: service_address, value: resp, directives: HttpCacheDirectives.new.(headers: resp.headers) )
-          resp
+          puts "HTTP Cache====> Make Expense Call"
+          {value: resp, directives: HttpCacheDirectives.new.(headers: resp.headers)}
         end
+      end
+
+      def refresh_cache(input, result)
+        puts "HTTP Cache====> in refresh_cache"
+        if caching_enabled(result[:directives])
+          puts "HTTP Cache====> its cachable"
+          # TODO: check the if-not-modified path
+          CACHE.set(input[0], result)
+        end
+        result
       end
 
 
@@ -48,11 +72,9 @@ module AnyPort
         if caching_enabled(directives)
           CACHE.set(service_address, {value: value, directives: directives})
         end
-        # binding.pry
       end
 
       def revalidate_headers(directives)
-        binding.pry
         [:if_modified_since, :if_none_match].inject({}) do | hrds, checker |
           hrd_prop = self.send(checker, directives)
           hrds[hrd_prop[0]] = hrd_prop[1] if hrd_prop
