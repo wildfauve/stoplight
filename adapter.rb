@@ -10,8 +10,10 @@ require 'dry-types'
 require 'ytry'
 
 Dir["#{Dir.pwd}/lib/shared/*.rb"].each {|file| require file }
-
+Dir["#{Dir.pwd}/lib/resources/*.rb"].each {|file| require file }
+Dir["#{Dir.pwd}/lib/cache/*.rb"].each {|file| require file }
 Dir["#{Dir.pwd}/lib/*.rb"].each {|file| require file }
+
 
 
 class MockClient
@@ -68,9 +70,9 @@ class MockServiceAdapterWithoutCircuit
 end
 
 
-result = MockServiceAdapter.new.perform
+result = MockServiceClient.new.get_all_hamsters(qos: {protocol: :sync, on_failure: :raise})
 puts result
-result = MockServiceAdapter.new.perform
+result = MockServiceClient.new.get_all_hamsters(qos: {protocol: :sync, on_failure: :raise})
 binding.pry
 # MockServiceAdapterWithoutCircuit.new.perform
 

@@ -19,6 +19,7 @@ module AnyPort
         puts "CACHE Directives: expires: #{@headers["expires"]}"
 
         analyse_cache_directives
+
         HttpCacheDirectivesValue.new( caching_enabled: caching_enabled,
                                       perform_modification_check: perform_modification_check,
                                       cache_valid_until: cache_valid_until,
@@ -42,7 +43,7 @@ module AnyPort
         @caching_enabled = true
         @perform_modification_check = false
         @revalidate =  must_revalidate_present?
-        @caching_enabled = false if no_store_present?
+        @caching_enabled = false if no_store_present? || @headers.empty?
         if no_cache_present? && etag_present?
           @perform_modification_check = true
         elsif no_cache_present? && !etag_present
