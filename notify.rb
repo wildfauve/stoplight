@@ -1,36 +1,45 @@
-# require 'stoplight'
-# require 'rest-client'
 require 'pry'
-# require 'redis'
-# require 'diplomat'
 require 'dry-container'
 require 'dry-auto_inject'
-# require 'mini_cache'
 require 'dry-types'
-# require 'ytry'
+require 'dry-validation'
+require 'dry-monads'
+
 
 def set_up_container
   container = Dry::Container.new
-  container.register("event_handler", -> { EventHandler.new } )
   container.register("subscriber", -> { Subscriber } )
-  container.register("invoice_handler", -> { InvoiceHandler } )
+  container.namespace("event_handlers") do
+    register("event_handler", -> { EventHandler.new } )
+    register("invoice_created_handler", -> { InvoiceCreatedHandler.new } )
+    register("event_handler_factory", -> { EventHandlerFactory.new } )
+  end
+  container.namespace("values") do
+    register("invoice_created_value", -> { InvoiceCreatedValue } )
+    register("subscriber_value", -> { SubscriberValue } )
+  end
+  container.namespace("channel_handlers") do
+    register("channel_handler_factory", -> { ChannelHandlerFactory } )
+    register("email_channel_handler", -> { EmailChannelHandler.new} )
+    register("email_mapper", -> { MandrillMapper.new} )
+  end
+  container.namespace("templates") do
+    register("template_factory", -> { TemplateFactory.new } )
+    register("invoice_created_template", -> { InvoiceCreatedTemplate } )
+  end
   container
 end
 
-AutoInject = Dry::AutoInject(set_up_container)
+Container = set_up_container
+AutoInject = Dry::AutoInject(Container)
+
+M = Dry::Monads
 
 # Dir["#{Dir.pwd}/lib/shared/*.rb"].each {|file| require file }
 # Dir["#{Dir.pwd}/lib/resources/*.rb"].each {|file| require file }
 # Dir["#{Dir.pwd}/lib/cache/*.rb"].each {|file| require file }
-Dir["#{Dir.pwd}/lib/*.rb"].each {|file| require file }
+Dir["#{Dir.pwd}/lib/**/*.rb"].each {|file| require file }
 
-#include AutoInject["event_handler"]
+event = {kind: "invoice.created", party: "/party/1", amount: "10.01", invoice_date: Date.today.iso8601}
 
-event = {kind: "invoice_payment", party: "/party/1", amount: "10.01"}
-
-EventHandler.new.(event)
-
-binding.pry
-
-
-puts result
+Container["event_handlers.event_handler"].(event)
